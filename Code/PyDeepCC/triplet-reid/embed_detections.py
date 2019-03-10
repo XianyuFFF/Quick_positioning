@@ -9,9 +9,9 @@ import json
 import numpy as np
 import tensorflow as tf
 
-from aggregators import AGGREGATORS
-import common
-from duke_utils import *
+from .aggregators import AGGREGATORS
+from .common import *
+from .duke_utils import *
 import scipy.io as sio
 import functools
 
@@ -43,11 +43,11 @@ parser.add_argument(
          'root. Uses the last checkpoint if not provided.')
 
 parser.add_argument(
-    '--loading_threads', default=8, type=common.positive_int,
+    '--loading_threads', default=8, type=positive_int,
     help='Number of threads used for parallel data loading.')
 
 parser.add_argument(
-    '--batch_size', default=256, type=common.positive_int,
+    '--batch_size', default=256, type=positive_int,
     help='Batch size used during evaluation, adapt based on available memory.')
 
 
@@ -223,24 +223,6 @@ def main():
 
         if not args.quiet:
             print("Done with embedding, aggregating augmentations...", flush=True)
-
-        if len(modifiers) > 1:
-            # Pull out the augmentations into a separate first dimension.
-            emb_storage = emb_storage.reshape(len(data_fids), len(modifiers), -1)
-            emb_storage = emb_storage.transpose((1,0,2))  # (Aug,FID,128D)
-
-            # Store the embedding of all individual variants too.
-            emb_dataset = f_out.create_dataset('emb_aug', data=emb_storage)
-
-            # Aggregate according to the specified parameter.
-            emb_storage = AGGREGATORS[args.aggregator](emb_storage)
-
-        # Store the final embeddings.
-        emb_dataset = f_out.create_dataset('emb', data=emb_storage)
-
-        # Store information about the produced augmentation and in case no crop
-        # augmentation was used, if the images are resized or avg pooled.
-        f_out.create_dataset('augmentation_types', data=np.asarray(modifiers, dtype='|S'))
 
 
 if __name__ == '__main__':
