@@ -1,8 +1,10 @@
 import tensorflow as tf
+import os
 
-from nets.resnet_v1 import resnet_v1_50, resnet_arg_scope
+from triplet_reid.nets.resnet_v1 import resnet_v1_50, resnet_arg_scope
 
 _RGB_MEAN = [123.68, 116.78, 103.94]
+
 
 def endpoints(image, is_training):
     if image.get_shape().ndims != 4:
