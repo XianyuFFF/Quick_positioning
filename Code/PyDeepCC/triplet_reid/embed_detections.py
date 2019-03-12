@@ -42,6 +42,7 @@ def five_crops(image, crop_size):
 def embed_detections(experiment_root, detection_generator, num_detections, file_name, check_point=None, loading_threads=8,
                      batch_size=256, flip_augment=False, crop_augment=False, aggregator=None, quiet=False):
 
+    tf.reset_default_graph()
     # Load the args from the original experiment.
     args_file = os.path.join(experiment_root, 'args.json')
 
@@ -138,6 +139,8 @@ def embed_detections(experiment_root, detection_generator, num_detections, file_
         emb_storage = np.zeros(
             (num_detections * len(modifiers), args_resumed['embedding_dim']), np.float32)
 
+        print(emb_storage.shape)
+
         for start_idx in count(step=batch_size):
             try:
                 emb = sess.run(endpoints['emb'])
@@ -150,3 +153,8 @@ def embed_detections(experiment_root, detection_generator, num_detections, file_
 
         if not quiet:
             print("Done with embedding, aggregating augmentations...", flush=True)
+
+        emb_dataset = f_out.create_dataset('emb', data=emb_storage)
+        # Store information about the produced augmentation and in case no crop
+        # augmentation was used, if the images are resized or avg pooled.
+        f_out.create_dataset('augmentation_types', data=np.asarray(modifiers, dtype='|S'))

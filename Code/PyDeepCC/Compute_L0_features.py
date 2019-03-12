@@ -3,7 +3,6 @@ import os
 import glob
 import scipy.io as sio
 import h5py
-from utils.pose2bb import pose2bb, scale_bb
 import numpy as np
 from functools import partial
 from triplet_reid.embed_detections import embed_detections
@@ -26,4 +25,4 @@ file_name = configs['file_name']
 for i in range(1, 9):
     num_detections = num_detections_from_openpose(i, detections_path)
     detection_generator = partial(detections_generator_from_openpose, i, dataset_path, detections_path)
-    embed_detections(experiment_root, detection_generator, num_detections,  file_name)
+    embed_detections(experiment_root, detection_generator, num_detections,  file_name.format(i))

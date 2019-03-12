@@ -24,9 +24,19 @@ configs = {
         'checkpoint_frequency': 1000,
         'hard_pool_size': 0,
     },
+
+    'tracklets': {
+        'window_width': 50,
+        'min_length': 5,
+        'alpha': 1,
+        'beta': 2,
+        'cluster_coeff': 0.75,
+        'nearest_neighbors': 8,
+        'speed_limit': 20,
+        'threshold': 8
+    },
     'dataset_path': '/home/fyq/Documents/Datasets/DukeMTMC/',
-    'detections_path': 'temp_detections.mat',
-    'file_name': 'temp_features.h5',
+    'file_name': '../experiments/demo/L0-features/features{}.h5',
     'render_threshold': 0.005,
     'video_width': 1920,
     'video_height': 1080,
