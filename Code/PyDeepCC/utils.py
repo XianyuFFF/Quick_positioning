@@ -1,4 +1,10 @@
 import numpy as np
+import numpy.linalg as LA
+from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import linkage
+from scipy.cluster.hierarchy import fcluster
+
+
 
 
 def get_bounding_box_centers(bounding_boxs):
@@ -16,3 +22,79 @@ def estimated_velocities(original_detections, start_frame, end_frame, nearest_ne
     search_range_frames = original_detections[search_range_mask, 0]
     detection_indices = np.asarray(list(filter(lambda x: start_frame <= x < end_frame, search_range_frames)),
                                    dtype=np.int32)
+
+    # Compute all pairwise distances
+    pair_distance = pdist(search_range_centers, search_range_frames)
+    num_detections = len(detection_indices)
+    estimated_velocities_ = np.zeros((num_detections, 2))
+
+    # Estimate the velocity of each detection
+    for i in range(num_detections):
+        current_detection_index = detection_indices[i]
+
+        velocities = np.array([])
+        current_frame = search_range_frames[current_detection_index]
+
+        for frame in range(current_frame - nearest_neighbors - 1, current_frame + nearest_neighbors):
+            if abs(current_frame - frame) <= 0:
+                continue
+
+            detections_at_this_time_instant = search_range_frames == frame
+            if sum(detections_at_this_time_instant) == 0:
+                continue
+
+            distances_at_this_time_instant = pair_distance[current_detection_index, :]
+            distances_at_this_time_instant[detections_at_this_time_instant == 0] = np.inf
+
+            # Find detection closest to the current detection
+            target_detection_index = np.argmin(distances_at_this_time_instant)
+            estimated_distance = (search_range_centers[target_detection_index, :] -
+                                 search_range_centers[current_detection_index, :])
+            estimated_velocity = estimated_distance / (search_range_frames[target_detection_index] -
+                                                       search_range_frames[current_detection_index])
+
+            # Check if speed limit is violated
+            estimated_speed = LA.norm(estimated_velocity)
+            if estimated_speed > speed_limit:
+                continue
+
+            # Update velocity estimates
+            velocities = np.vstack((velocities, estimated_velocity))
+
+        if velocities.size == 0:
+            velocities = np.array([0, 0])
+
+        # Estimate the velocity
+        estimated_velocities_[i, 0] = LA.norm(velocities[:, 0])
+        estimated_velocities_[i, 1] = LA.norm(velocities[:, 1])
+
+    return estimated_velocities_
+
+
+# To check
+def get_spatial_group_id(use_grouping, current_detection_IDX, detection_centers, params):
+    spatial_group_IDs = np.ones((len(current_detection_IDX), 1))
+
+    if use_grouping is True:
+        pairwise_distance = pdist(detection_centers, detection_centers)
+        agglomeration = linkage(pairwise_distance)
+        num_spatial_groups = round(params['cluster_coeff'] * len(current_detection_IDX) / params['window_width'])
+        num_spatial_groups = max(num_spatial_groups, 0)
+
+        while True:
+            spatial_group_IDs = fcluster(agglomeration,criterion='maxclust', t= num_spatial_groups)
+            uid = np.unique(spatial_group_IDs)
+            freq = np.hstack((np.histogram(spatial_group_IDs.flatten()), uid))
+
+            largest_group_size = len(freq)
+
+            # The BIP solver might run out of memory for large graph
+            if largest_group_size <= 150:
+                return spatial_group_IDs
+            num_spatial_groups += 1
+
+
+
+
+
+
