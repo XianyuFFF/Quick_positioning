@@ -3,6 +3,60 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from L1_tracklets.KernighanLin import KernighanLin
 
+class SmoothedTracklet
+
+
+def smooth_tracklets(tracklets, segement_start, segment_interval, feature_apperance, min_tracklet_length, current_interval):
+    tracklet_ids = np.unique(tracklets[:, 1])
+    num_tracklets = len(tracklet_ids)
+
+    smoothed_tracklets = []
+    for i in range(num_tracklets):
+        mask = tracklets[:, 1] == tracklet_ids[i]
+        detections = tracklets[mask, :]
+
+        # Reject tracklets of short length
+        start = min(detections[:, 0])
+        finish = max(detections[:, 0])
+
+        if (np.size(detections, 0) < min_tracklet_length) or finish - start < min_tracklet_length:
+            continue
+
+        interval_length = finish - start + 1
+        datapoints = np.arange(start, finish, interval_length)
+        frames = detections[:, 0]
+
+        current_tracklet = np.zeros((interval_length, np.size(tracklets, 1)))
+        current_tracklet[:, 1] = np.ones((interval_length, 1)) * tracklet_ids[i]
+        current_tracklet[:, 0] = np.array(start, finish)
+
+        for k in range(2, np.size(tracklets, 1)):
+            points = detections[:, k]
+            p = np.polyfit(frames, points, 1)
+            new_points = np.poly1d(p)(datapoints)
+            current_tracklet[:, k] = new_points.T
+
+        median_feature = np.median(feature_apperance[mask])
+        centers = get_bounding_box_centers(current_tracklet[:, 2:6])
+        center_point = np.median(centers)
+        center_point_world = 1
+
+        smoothed_tracklet = SmoothedTracklet()
+
+        setattr(smoothed_tracklet, 'feature', median_feature)
+        setattr(smoothed_tracklet, 'center', center_point)
+        setattr(smoothed_tracklet, 'center_world', center_point_world)
+        setattr(smoothed_tracklet, 'data', current_tracklet)
+        setattr(smoothed_tracklet, 'features', feature_apperance[mask])
+        setattr(smoothed_tracklet, 'realdata', detections)
+        setattr(smoothed_tracklet, 'mask', mask)
+        setattr(smoothed_tracklet, 'start_frame', start)
+        setattr(smoothed_tracklet, 'end_frame', finish)
+        setattr(smoothed_tracklet, 'segment_start', segement_start)
+        setattr(smoothed_tracklet, 'segment_interval', segment_interval)
+        setattr(smoothed_tracklet, 'segment_end', segement_start + segment_interval - 1)
+        smoothed_tracklets.append(smoothed_tracklet)
+    return smoothed_tracklets
 
 def create_tracklets(configs, original_detections, all_features, start_frame, end_frame):
     current_detections_IDX = np.asarray(list(filter(lambda x: start_frame <= x < end_frame, original_detections[:, 1])),
@@ -11,6 +65,7 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
     if len(current_detections_IDX) < 2:
         return
     total_labels = 0
+    current_interval = 0
     detections_centers = get_bounding_box_centers(original_detections[current_detections_IDX, 2:6])
     detection_frames = original_detections[current_detections_IDX, 0]
     estimated_velocity = estimated_velocities(original_detections, start_frame, end_frame,
@@ -48,14 +103,23 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
         total_labels = max(labels)
         identities = labels
 
-        original_detections[spatial_group_ID, 0] = identities
+        original_detections[spatial_group_observations, 1] = identities
 
+    tracklet_to_smooth = original_detections[current_detections_IDX, :]
+    feature_apperance = all_features[current_detections_IDX]
+    smoothed_tracklets = smooth_tracklets(tracklet_to_smooth, start_frame, params['widow_width'], feature_apperance,
+                                          params['min_length'], current_interval)
 
+    for i, smoothed_tracklet in enumerate(smoothed_tracklets):
+        setattr(smoothed_tracklet, 'id', i)
+        setattr(smoothed_tracklet, 'ids', i)
 
+    tracklets = []
 
+    if smoothed_tracklets:
+        ids = list(range(len(smoothed_tracklets)))
+        tracklets = smoothed_tracklets
 
+    # TODO tracklets
 
-
-
-
-
+    return tracklets
