@@ -1,10 +1,7 @@
 import numpy as np
 import numpy.linalg as LA
-from scipy.spatial.distance import pdist
-from scipy.cluster.hierarchy import linkage
-from scipy.cluster.hierarchy import fcluster
-
-
+from scipy.spatial.distance import pdist, cdist
+from scipy.cluster.hierarchy import linkage, fcluster
 
 
 def get_bounding_box_centers(bounding_boxs):
@@ -49,7 +46,7 @@ def estimated_velocities(original_detections, start_frame, end_frame, nearest_ne
             # Find detection closest to the current detection
             target_detection_index = np.argmin(distances_at_this_time_instant)
             estimated_distance = (search_range_centers[target_detection_index, :] -
-                                 search_range_centers[current_detection_index, :])
+                                  search_range_centers[current_detection_index, :])
             estimated_velocity = estimated_distance / (search_range_frames[target_detection_index] -
                                                        search_range_frames[current_detection_index])
 
@@ -82,7 +79,7 @@ def get_spatial_group_id(use_grouping, current_detection_IDX, detection_centers,
         num_spatial_groups = max(num_spatial_groups, 0)
 
         while True:
-            spatial_group_IDs = fcluster(agglomeration,criterion='maxclust', t= num_spatial_groups)
+            spatial_group_IDs = fcluster(agglomeration, criterion='maxclust', t=num_spatial_groups)
             uid = np.unique(spatial_group_IDs)
             freq = np.hstack((np.histogram(spatial_group_IDs.flatten()), uid))
 
@@ -94,7 +91,56 @@ def get_spatial_group_id(use_grouping, current_detection_IDX, detection_centers,
             num_spatial_groups += 1
 
 
+def get_appearance_sub_matrix(spatial_group_observations, features_vectors, threshold):
+    features = get_feature(features_vectors, spatial_group_observations)
+    dist = cdist(features, features)
+    correlation = (threshold - dist) / threshold
+    return correlation
 
 
+def motion_affinity(detection_centers, detection_frames, estimated_velocity, speed_limit, beta):
+    # This function compute the motion affinities given a set of detections
+    # A simple motion prediction is performed from a source detection to
+    # a target detection to compute the prediction error
+    num_detections = np.size(detection_centers, 0)
+    impossibility_matrix = np.zeros((len(detection_frames)))
+
+    frame_difference = cdist(detection_frames, detection_frames)
+    velocity_X = np.tile(estimated_velocity[:, 0], (1, num_detections))
+    velocity_Y = np.tile(estimated_velocity[:, 1], (1, num_detections))
+    center_X = np.tile(detection_centers[:, 0], (1, num_detections))
+    center_Y = np.tile(detection_centers[:, 1], (1, num_detections))
+
+    error_X_forward = center_X + velocity_X * frame_difference - center_X.conj().transpose()
+    error_Y_forward = center_Y + velocity_Y * frame_difference - center_Y.conj().transpose()
+
+    error_X_backward = center_X.conj().T + velocity_X.conj().T * frame_difference.conj().T - center_X
+    error_Y_backward = center_Y.conj().T + velocity_Y.conj().T * frame_difference.conj().T - center_Y
+
+    error_forward = np.sqrt(error_X_forward ** 2 + error_Y_forward ** 2)
+    error_backward = np.sqrt(error_X_backward**2 + error_Y_backward ** 2)
+
+    # only upper triangular part is valid
+    prediction_error = min(error_forward, error_backward)
+    prediction_error = np.triu(prediction_error) + np.triu(prediction_error)
+
+    # Check if speed limit is violated
+    x_diff = center_X - center_X.conj().T
+    y_diff = center_Y - center_Y.conj().T
+    distance_matrix = np.sqrt(x_diff**2 + y_diff ** 2)
+
+    max_required_speed_matrix = distance_matrix / abs(frame_difference)
+    prediction_error[max_required_speed_matrix > speed_limit] = np.inf
+    impossibility_matrix[max_required_speed_matrix > speed_limit] = 1
+
+    motion_scores = 1 - beta * prediction_error
+    return motion_scores, impossibility_matrix
+
+def sub2ind(array_shape, rows, cols):
+    return rows*array_shape[1] + cols
 
 
+def get_feature(features_vectors, spatial_group_observations):
+    pass
+    return np.zeros((1, 1))
+    # TODO
