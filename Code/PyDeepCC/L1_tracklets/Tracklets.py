@@ -1,12 +1,30 @@
-from utils import get_bounding_box_centers, estimated_velocities, get_spatial_group_id, get_appearance_sub_matrix, motion_affinity
+from utils import get_bounding_box_centers, estimated_velocities, get_spatial_group_id, get_appearance_sub_matrix, \
+    motion_affinity
 import numpy as np
 from scipy.spatial.distance import cdist
 from L1_tracklets.KernighanLin import KernighanLin
 
-class SmoothedTracklet
+
+class SmoothedTracklet:
+    def __init__(self, feature, center, center_world, data, features, real_data, mask, start, finish, interval,
+                 segment_start, segment_interval, segment_end):
+        self.feature = feature
+        self.center = center
+        self.center_world = center_world
+        self.data = data
+        self.features = features
+        self.real_data = real_data
+        self.mask = mask
+        self.start = start
+        self.finish = finish
+        self.interval = interval
+        self.segment_start = segment_start
+        self.segment_interval = segment_interval
+        self.segment_end = segment_end
 
 
-def smooth_tracklets(tracklets, segement_start, segment_interval, feature_apperance, min_tracklet_length, current_interval):
+def smooth_tracklets(tracklets, segement_start, segment_interval, feature_apperance, min_tracklet_length,
+                     current_interval):
     tracklet_ids = np.unique(tracklets[:, 1])
     num_tracklets = len(tracklet_ids)
 
@@ -41,22 +59,13 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
         center_point = np.median(centers)
         center_point_world = 1
 
-        smoothed_tracklet = SmoothedTracklet()
+        smoothed_tracklet = SmoothedTracklet(median_feature, center_point, center_point_world, current_tracklet,
+                                             feature_apperance, detections, mask, start, finish, current_interval,
+                                             segement_start, segment_interval, segment_interval + segement_start - 1)
 
-        setattr(smoothed_tracklet, 'feature', median_feature)
-        setattr(smoothed_tracklet, 'center', center_point)
-        setattr(smoothed_tracklet, 'center_world', center_point_world)
-        setattr(smoothed_tracklet, 'data', current_tracklet)
-        setattr(smoothed_tracklet, 'features', feature_apperance[mask])
-        setattr(smoothed_tracklet, 'realdata', detections)
-        setattr(smoothed_tracklet, 'mask', mask)
-        setattr(smoothed_tracklet, 'start_frame', start)
-        setattr(smoothed_tracklet, 'end_frame', finish)
-        setattr(smoothed_tracklet, 'segment_start', segement_start)
-        setattr(smoothed_tracklet, 'segment_interval', segment_interval)
-        setattr(smoothed_tracklet, 'segment_end', segement_start + segment_interval - 1)
         smoothed_tracklets.append(smoothed_tracklet)
     return smoothed_tracklets
+
 
 def create_tracklets(configs, original_detections, all_features, start_frame, end_frame):
     current_detections_IDX = np.asarray(list(filter(lambda x: start_frame <= x < end_frame, original_detections[:, 1])),
@@ -69,8 +78,8 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
     detections_centers = get_bounding_box_centers(original_detections[current_detections_IDX, 2:6])
     detection_frames = original_detections[current_detections_IDX, 0]
     estimated_velocity = estimated_velocities(original_detections, start_frame, end_frame,
-                                            params['nearest_neighbors'],
-                                            params['speed_limit'])
+                                              params['nearest_neighbors'],
+                                              params['speed_limit'])
     spatial_group_IDs = get_spatial_group_id(configs['use_groupping'], current_detections_IDX, detections_centers,
                                              params)
 
@@ -81,7 +90,8 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
         spatial_group_observations = current_detections_IDX[elements]
 
         # Create an appearance affinity matrix and motion affinity matix
-        appearance_correlation = get_appearance_sub_matrix(spatial_group_observations, all_features, params['threshold'])
+        appearance_correlation = get_appearance_sub_matrix(spatial_group_observations, all_features,
+                                                           params['threshold'])
         spatial_group_detection_centers = detections_centers[elements, :]
         spatial_group_detection_frames = detection_frames[elements, :]
         spatial_group_estimated_velocity = estimated_velocity[elements, :]
@@ -92,7 +102,7 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
 
         # Combine affinities into correlations
         interval_distance = cdist(spatial_group_detection_frames, spatial_group_detection_frames)
-        discount_matrix = min(1, -np.log(interval_distance/params['window_width']))
+        discount_matrix = min(1, -np.log(interval_distance / params['window_width']))
         correlation_matrix = motion_correlation * discount_matrix + appearance_correlation
         correlation_matrix[imp_matrix == 1] = -np.inf
 

@@ -1,5 +1,6 @@
 from config_default import configs
 import h5py
+from L1_tracklets.Tracklets import create_tracklets
 
 def compute_L1_tracklets():
     for i in range(1, 9):
@@ -8,6 +9,5 @@ def compute_L1_tracklets():
         features = None
         detections = None
 
-        tracklets = []
-
-        
+        # tracklets = create_tracklets(configs)
+    # TODO
