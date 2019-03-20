@@ -6,6 +6,7 @@
         <entryData>
           <resourceRoots>
             <path value="file://$PROJECT_DIR$/Code/PyDeepCC/experiments" />
+            <path value="file://$PROJECT_DIR$/Src" />
           </resourceRoots>
         </entryData>
       </entry>

@@ -6,6 +6,30 @@ import os
 import scipy.io as sio
 import h5py
 import tensorflow as tf
+import glob
+import json
+
+
+class CAMPUSVideoReader:
+    def __init__(self, dataset_path, video_name):
+        self.video_name = video_name
+        self.dataset_path = dataset_path
+        self.PrevFrame = -1
+        self.Video = cv2.VideoCapture(os.path.join(self.dataset_path, self.video_name), cv2.CAP_FFMPEG)
+
+    def getFrame(self, iFrame):
+        current_frame = iFrame
+
+        assert self.Video.get(cv2.CAP_PROP_POS_FRAMES) == current_frame, 'Frame position error'
+        result, img = self.Video.read()
+        img = img[:, :, ::-1]  # bgr to rgb
+        # Update
+        self.PrevFrame = current_frame
+        return img
+
+
+
+
 
 
 class DukeVideoReader:
@@ -135,7 +159,6 @@ def pose2bb(pose):
     if np.sum(valid) < 2:
         bb = np.array([0, 0, 0, 0])
         print('got an invalid box')
-        print(pose)
         return bb
 
     points_det = pose[valid, 0:2]
@@ -174,10 +197,10 @@ def pose2bb(pose):
     right = max(base_right, fit_right)
     bottom = max(base_bottom, fit_bottom)
 
-    left = left * 1920
-    top = top * 1080
-    right = right * 1920
-    bottom = bottom * 1080
+    # left = left * 1920
+    # top = top * 1080
+    # right = right * 1920
+    # bottom = bottom * 1080
 
     height = bottom - top + 1
     width = right - left + 1
@@ -255,12 +278,44 @@ def detections_generator(base_path, detections, height, width):
         yield snapshot
 
 
-def num_detections_from_openpose(iCam, detections_path):
+def num_detections_from_openpose_mat(iCam, detections_path):
     pose_file = os.path.join(detections_path, 'camera{0}.mat'.format(iCam))
 
     with h5py.File(pose_file, 'r') as f:
         detections = np.transpose(np.array(f['detections']))
     return detections.shape[0]
+
+
+def num_detections_from_openpose_json(detections_path):
+    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
+    num = 0
+    for keypoints_json in keypoints_jsones:
+        num += len(json.load(open(keypoints_json, 'r'))['people'])
+    return num
+
+def detections_generator_from_openpose_json(video_name, base_path, detections_path):
+    reader = CAMPUSVideoReader(base_path, video_name)
+    prev_frame = -1
+    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
+    keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
+    for i, keypoints_json in enumerate(keypoints_jsones):
+        keypoints = json.load(open(keypoints_json, 'r'))
+
+        img = reader.getFrame(i)
+
+        for people in keypoints['people']:
+            pose = people['pose_keypoints_2d']
+
+            bb = pose2bb(pose)
+            newbb, newpose = scale_bb(bb, pose, 1.25)
+
+            if newbb[2] < 20 or newbb[3] < 20:
+                snapshot = np.zeros((256, 128, 3))
+            else:
+                snapshot = get_bb(img, newbb)
+                snapshot = cv2.resize(snapshot, (128, 256))
+
+            yield snapshot
 
 
 def detections_generator_from_openpose(iCam, base_path, detections_path):

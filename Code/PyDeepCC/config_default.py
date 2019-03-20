@@ -35,8 +35,10 @@ configs = {
         'speed_limit': 20,
         'threshold': 8
     },
-    'dataset_path': '/home/fyq/Documents/Datasets/DukeMTMC/',
-    'file_name': '../experiments/demo/L0-features/features{}.h5',
+    'openpose': '/home/fyq/openpose/build/examples/openpose/openpose.bin',
+    'openpose_model_folder' : '/home/fyq/openpose/models/',
+    'dataset_path': '../../../Src',
+    'file_name': 'L0-features/features.h5',
     'render_threshold': 0.005,
     'video_width': 1920,
     'video_height': 1080,

@@ -89,6 +89,7 @@ def embed_detections(experiment_root, detection_generator, num_detections, file_
     dataset = tf.data.Dataset.from_generator(detection_generator, tf.float32,
                                              tf.TensorShape([net_input_size[0], net_input_size[1], 3]))
 
+
     modifiers = ['original']
     if flip_augment:
         dataset = dataset.map(flip_augment)
@@ -138,8 +139,6 @@ def embed_detections(experiment_root, detection_generator, num_detections, file_
         # Go ahead and embed the whole dataset, with all augmented versions too.
         emb_storage = np.zeros(
             (num_detections * len(modifiers), args_resumed['embedding_dim']), np.float32)
-
-        print(emb_storage.shape)
 
         for start_idx in count(step=batch_size):
             try:
