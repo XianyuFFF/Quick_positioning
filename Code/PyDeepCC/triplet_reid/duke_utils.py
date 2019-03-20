@@ -286,6 +286,16 @@ def num_detections_from_openpose_mat(iCam, detections_path):
     return detections.shape[0]
 
 
+def load_detections_openpose_json(detections_path):
+    keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
+    keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
+    detections = []
+    for i, keypoints_json in enumerate(keypoints_jsones):
+        poses = [np.hstack((i, people['keypoints_pose_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
+        detections.append(poses)
+    return np.asarray(detections)
+
+
 def num_detections_from_openpose_json(detections_path):
     keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
     num = 0
