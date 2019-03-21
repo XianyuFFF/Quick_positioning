@@ -5,43 +5,40 @@ from scipy.cluster.hierarchy import linkage, fcluster
 
 
 def get_bounding_box_centers(bounding_boxs):
-    centers = np.hstack(
+    centers = np.vstack(
         (bounding_boxs[:, 0] + 0.5 * bounding_boxs[:, 2],
          bounding_boxs[:, 1] + 0.5 * bounding_boxs[:, 3]))
-    return centers
-
+    return centers.T
 
 def estimated_velocities(original_detections, start_frame, end_frame, nearest_neighbors, speed_limit):
-    search_range_mask = np.asarray(list(filter(lambda x: start_frame - nearest_neighbors <= x <
-                                                         end_frame + nearest_neighbors, original_detections)),
-                                   dtype=np.int32)
-    search_range_centers = get_bounding_box_centers(original_detections[search_range_mask, 2:6])
-    search_range_frames = original_detections[search_range_mask, 0]
-    detection_indices = np.asarray(list(filter(lambda x: start_frame <= x < end_frame, search_range_frames)),
-                                   dtype=np.int32)
+    search_range_mask = np.where(np.logical_and(original_detections[:, 0] >= start_frame-nearest_neighbors,
+                                                original_detections[:, 0] < end_frame+nearest_neighbors))[0]
+    # due to main code lack camera, so this is [1:5] in main code
+    search_range_centers = get_bounding_box_centers(original_detections[search_range_mask, 1:5])
+    search_range_frames = np.asarray(original_detections[search_range_mask, 0], dtype=int)
+    detection_indices = np.where(np.logical_and(search_range_frames >= start_frame, search_range_frames < end_frame))[0]
 
     # Compute all pairwise distances
-    pair_distance = pdist(search_range_centers, search_range_frames)
+    pair_distance = cdist(search_range_centers, search_range_centers)
     num_detections = len(detection_indices)
     estimated_velocities_ = np.zeros((num_detections, 2))
 
     # Estimate the velocity of each detection
-    for i in range(num_detections):
-        current_detection_index = detection_indices[i]
+    for i, current_detection_index in enumerate(detection_indices):
 
-        velocities = np.array([])
+        velocities = []
         current_frame = search_range_frames[current_detection_index]
 
-        for frame in range(current_frame - nearest_neighbors - 1, current_frame + nearest_neighbors):
+        for frame in range(current_frame - nearest_neighbors, current_frame + nearest_neighbors + 1):
             if abs(current_frame - frame) <= 0:
                 continue
 
             detections_at_this_time_instant = search_range_frames == frame
-            if sum(detections_at_this_time_instant) == 0:
+            if np.sum(detections_at_this_time_instant) == 0:
                 continue
 
-            distances_at_this_time_instant = pair_distance[current_detection_index, :]
-            distances_at_this_time_instant[detections_at_this_time_instant == 0] = np.inf
+            distances_at_this_time_instant = np.copy(pair_distance[current_detection_index, :])
+            distances_at_this_time_instant[np.where(np.logical_not(detections_at_this_time_instant))[0]] = np.inf
 
             # Find detection closest to the current detection
             target_detection_index = np.argmin(distances_at_this_time_instant)
@@ -56,17 +53,15 @@ def estimated_velocities(original_detections, start_frame, end_frame, nearest_ne
                 continue
 
             # Update velocity estimates
-            velocities = np.vstack((velocities, estimated_velocity))
-
+            velocities.append(estimated_velocity)
+        velocities = np.asarray(velocities)
         if velocities.size == 0:
-            velocities = np.array([0, 0])
-
+            velocities = np.array([[0, 0]])
         # Estimate the velocity
-        estimated_velocities_[i, 0] = LA.norm(velocities[:, 0])
-        estimated_velocities_[i, 1] = LA.norm(velocities[:, 1])
+        estimated_velocities_[i, 0] = np.mean(velocities[:, 0])
+        estimated_velocities_[i, 1] = np.mean(velocities[:, 1])
 
     return estimated_velocities_
-
 
 # To check
 def get_spatial_group_id(use_grouping, current_detection_IDX, detection_centers, params):
@@ -139,8 +134,3 @@ def motion_affinity(detection_centers, detection_frames, estimated_velocity, spe
 def sub2ind(array_shape, rows, cols):
     return rows*array_shape[1] + cols
 
-
-def get_feature(features_vectors, spatial_group_observations):
-    pass
-    return np.zeros((1, 1))
-    # TODO

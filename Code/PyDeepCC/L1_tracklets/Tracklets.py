@@ -68,18 +68,23 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
 
 
 def create_tracklets(configs, original_detections, all_features, start_frame, end_frame):
-    current_detections_IDX = np.asarray(list(filter(lambda x: start_frame <= x < end_frame, original_detections[:, 1])),
-                                        dtype=np.int32)
+    original_detections_frames = original_detections[:, 0]
+    current_detections_IDX = np.where(np.logical_and(original_detections_frames >= start_frame, original_detections_frames < end_frame))[0]
+
     params = configs['tracklets']
     if len(current_detections_IDX) < 2:
         return
+
     total_labels = 0
     current_interval = 0
-    detections_centers = get_bounding_box_centers(original_detections[current_detections_IDX, 2:6])
+    detections_centers = get_bounding_box_centers(original_detections[current_detections_IDX, 1:5])
     detection_frames = original_detections[current_detections_IDX, 0]
+
+
     estimated_velocity = estimated_velocities(original_detections, start_frame, end_frame,
                                               params['nearest_neighbors'],
                                               params['speed_limit'])
+
     spatial_group_IDs = get_spatial_group_id(configs['use_groupping'], current_detections_IDX, detections_centers,
                                              params)
 

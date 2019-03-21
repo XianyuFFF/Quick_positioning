@@ -5,7 +5,6 @@ import csv
 import os
 import scipy.io as sio
 import h5py
-import tensorflow as tf
 import glob
 import json
 
@@ -291,8 +290,8 @@ def load_detections_openpose_json(detections_path):
     keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
     detections = []
     for i, keypoints_json in enumerate(keypoints_jsones):
-        poses = [np.hstack((i, people['keypoints_pose_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
-        detections.append(poses)
+        poses = [np.hstack((i, people['pose_keypoints_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
+        detections.extend(poses)
     return np.asarray(detections)
 
 

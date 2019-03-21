@@ -42,4 +42,5 @@ configs = {
     'render_threshold': 0.005,
     'video_width': 1920,
     'video_height': 1080,
+    'total_frame': 2983,
 }
