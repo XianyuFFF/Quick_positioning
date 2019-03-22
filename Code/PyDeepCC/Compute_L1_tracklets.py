@@ -13,7 +13,7 @@ file_name = configs['file_name']
 
 
 def compute_L1_tracklets(total_frame):
-    frame_index = 0
+    frame_index = 1
     params = configs['tracklets']
     features = h5py.File(os.path.join(dataset_path, file_name), 'r')['emb']
     print(features)
@@ -33,18 +33,19 @@ def compute_L1_tracklets(total_frame):
         detections_conf = np.sum(detections_in_window[:, frame_index + 3:-1:3], 1)
         num_visiable = np.sum(detections_in_window[:, frame_index + 3:-1:3] > configs['render_threshold'], 1)
 
-        vaild = get_valid_detections(detections_in_window, detections_conf, num_visiable)
+        vaild = get_valid_detections(detections_in_window, detections_conf, num_visiable, frame_index)
         vaild = np.where(vaild)[0]
 
         detections_in_window = detections_in_window[vaild, :]
 
-        detections_in_window = np.delete(detections_in_window, list(range(5, np.size(detections_in_window, 1))), axis=1)
+        detections_in_window = np.delete(detections_in_window,
+                                         list(range(frame_index+5, np.size(detections_in_window, 1))), axis=1)
         filtered_detections = detections_in_window
 
         filtered_features = features[window_inds[vaild], :]
 
         tracklets = create_tracklets(configs, filtered_detections, filtered_features,
-                                     window_start_frame, window_end_frame)
+                                     window_start_frame, window_end_frame, frame_index)
 
 
 

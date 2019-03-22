@@ -10,12 +10,12 @@ def get_bounding_box_centers(bounding_boxs):
          bounding_boxs[:, 1] + 0.5 * bounding_boxs[:, 3]))
     return centers.T
 
-def estimated_velocities(original_detections, start_frame, end_frame, nearest_neighbors, speed_limit):
-    search_range_mask = np.where(np.logical_and(original_detections[:, 0] >= start_frame-nearest_neighbors,
-                                                original_detections[:, 0] < end_frame+nearest_neighbors))[0]
+def estimated_velocities(original_detections, start_frame, end_frame, nearest_neighbors, speed_limit, frame_index):
+    search_range_mask = np.where(np.logical_and(original_detections[:, frame_index] >= start_frame-nearest_neighbors,
+                                                original_detections[:, frame_index] < end_frame+nearest_neighbors))[0]
     # due to main code lack camera, so this is [1:5] in main code
-    search_range_centers = get_bounding_box_centers(original_detections[search_range_mask, 1:5])
-    search_range_frames = np.asarray(original_detections[search_range_mask, 0], dtype=int)
+    search_range_centers = get_bounding_box_centers(original_detections[search_range_mask, frame_index+1:frame_index+5])
+    search_range_frames = np.asarray(original_detections[search_range_mask, frame_index], dtype=int)
     detection_indices = np.where(np.logical_and(search_range_frames >= start_frame, search_range_frames < end_frame))[0]
 
     # Compute all pairwise distances

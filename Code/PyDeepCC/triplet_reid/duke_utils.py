@@ -289,8 +289,9 @@ def load_detections_openpose_json(detections_path):
     keypoints_jsones = glob.glob(os.path.join(detections_path, '*'))
     keypoints_jsones = sorted(keypoints_jsones, key=lambda x: int(x[x.find('_') + 1:x.rfind('_')]))
     detections = []
+    # i will be changed when camera id is imported
     for i, keypoints_json in enumerate(keypoints_jsones):
-        poses = [np.hstack((i, people['pose_keypoints_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
+        poses = [np.hstack((i, i, people['pose_keypoints_2d'])) for people in json.load(open(keypoints_json, 'r'))['people']]
         detections.extend(poses)
     return np.asarray(detections)
 
