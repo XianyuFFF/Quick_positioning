@@ -90,7 +90,7 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
 
     print('Creating tracklets: solving space-time groups')
 
-    for spatial_group_ID in range(0, max(spatial_group_IDs)):
+    for spatial_group_ID in range(1, max(spatial_group_IDs)+1):
         elements = np.nonzero(spatial_group_IDs == spatial_group_ID)[0]
         spatial_group_observations = current_detections_IDX[elements]
 

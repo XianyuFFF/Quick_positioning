@@ -43,4 +43,5 @@ configs = {
     'video_width': 1920,
     'video_height': 1080,
     'total_frame': 2983,
+    'use_groupping':True,
 }
