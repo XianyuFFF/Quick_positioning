@@ -35,6 +35,16 @@ configs = {
         'speed_limit': 20,
         'threshold': 8
     },
+    "trajectories": {
+        "apperance_groups": 0,
+        "alpha": 1,
+        "beta": 0.01,
+        "widow_width": 300,
+        "overlap": 150,
+        "speed_limit": 30,
+        "indifferent_time": 100,
+        "threshold": 8,
+    },
     'openpose': '/home/fyq/openpose/build/examples/openpose/openpose.bin',
     'openpose_model_folder' : '/home/fyq/openpose/models/',
     'dataset_path': '../../../Src',

@@ -132,3 +132,50 @@ def motion_affinity(detection_centers, detection_frames, estimated_velocity, spe
 def sub2ind(array_shape, rows, cols):
     return rows*array_shape[1] + cols
 
+
+def get_appearance_matrix(feature_vectors, threshold):
+    dist = cdist(feature_vectors, feature_vectors)
+    appearance_matrix = (threshold - dist) / threshold
+    return appearance_matrix
+
+
+def get_tracklets_features(tracklets, frame_index=1):
+    num_tracklets = len(tracklets)
+    # bounding box center for each tracklet
+    centers_world = {}
+    centers_view = {}
+    for i, tracklet in enumerate(tracklets):
+        detections = tracklet.data
+        # 2d points
+        bb = detections[:, [2, 3, 4, 5, 1]]
+        x = 0.5 * bb[:, 0] + bb[:, 2]
+        y = 0.5 * bb[:, 1] + bb[:, 3]
+        t = bb[:, 4]
+        centers_view[i] = np.vstack((x,y,t)).T
+        # 3d points
+        centers_world[i] = centers_view[i]
+
+    velocity = np.zeros((num_tracklets, 2))
+    duration = np.zeros((num_tracklets, 1))
+    intervals = np.zeros((num_tracklets, 2))
+    startpoint = np.zeros((num_tracklets, 2))
+    endpoint = np.zeros((num_tracklets, 2))
+
+    for ind in range(num_tracklets):
+        intervals[ind, :] = np.hstack((centers_world[ind][0, 2], centers_world[ind][-1, 2]))
+        startpoint[ind, :] = np.hstack((centers_world[ind][0, 0], centers_world[ind][0, 1]))
+        endpoint[ind, :] = np.hstack((centers_world[ind][-1, 0], centers_world[ind][-1, 1]))
+
+        duration[ind] = centers_world[ind][-1, 2] - centers_world[ind][0, 2]
+        direction = endpoint[ind, :] - startpoint[ind, :]
+        velocity[ind, :] = direction / duration[ind]
+    return centers_world, centers_view, startpoint, endpoint, intervals, duration, velocity
+
+
+def get_space_time_affinity(tracklets, beta, speed_limit, indifference_limit):
+    num_tracklets = len(tracklets)
+    _, _, startpoint, endpoint, intervals, _, velocity = get_tracklets_features(tracklets)
+    center_frame = np.round(np.mean(intervals, axis=1))
+
+    #TODO
+
