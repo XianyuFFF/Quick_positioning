@@ -16,7 +16,6 @@ def compute_L1_tracklets(total_frame):
     frame_index = 1
     params = configs['tracklets']
     features = h5py.File(os.path.join(dataset_path, file_name), 'r')['emb']
-    print(features)
     detections = load_detections_openpose_json(detections_path)
     all_dets = detections
 
@@ -39,15 +38,15 @@ def compute_L1_tracklets(total_frame):
         detections_in_window = detections_in_window[vaild, :]
 
         detections_in_window = np.delete(detections_in_window,
-                                         list(range(frame_index+5, np.size(detections_in_window, 1))), axis=1)
+                                         list(range(frame_index + 5, np.size(detections_in_window, 1))), axis=1)
         filtered_detections = detections_in_window
 
         filtered_features = features[window_inds[vaild], :]
 
-        tracklets = create_tracklets(configs, filtered_detections, filtered_features,
-                                     window_start_frame, window_end_frame, frame_index)
+        create_tracklets(configs, filtered_detections, filtered_features,
+                         window_start_frame, window_end_frame, frame_index, tracklets)
 
-
+        return tracklets
 
 
 if __name__ == '__main__':

@@ -3,6 +3,7 @@ from utils import sub2ind
 from functools import reduce
 import KL
 import networkx as nx
+import pandas as pd
 
 def KernighanLin(correlation_matrix):
     if np.size(correlation_matrix, 0) == 1:
@@ -30,6 +31,7 @@ def KernighanLin(correlation_matrix):
     G.add_nodes_from(list(range(n_nodes)))
     G.add_edges_from(edegs)
     conncomps = nx.connected_components(G)
+    print(list(conncomps))
 
     new_result = np.zeros(n_nodes)
 
@@ -39,3 +41,7 @@ def KernighanLin(correlation_matrix):
 
     return new_result
 
+
+if __name__ == '__main__':
+    correlation_matrix = pd.read_csv('correlation_matrix.txt', sep='\t', header=None).to_numpy()
+    print(KernighanLin(correlation_matrix))
