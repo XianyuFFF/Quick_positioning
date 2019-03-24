@@ -2,10 +2,62 @@ import numpy as np
 from sklearn.cluster import k_means
 from scipy.spatial.distance import cdist
 from collections import Counter
+from itertools import compress
 import time
 
 from utils import get_appearance_matrix, get_space_time_affinity
 from L1_tracklets.KernighanLin import KernighanLin
+
+
+def trajectories_to_top(trajectories):
+    data = []
+    for i, trajectory in enumerate(trajectories):
+        for k, tracklet in enumerate(trajectory.tracklets):
+            new_data = tracklet.data
+            new_data[:, 1] = i
+            data.append(new_data)
+    return data
+
+
+def fill_trajectories(detections):
+    detections = detections[detections[:, [1, 2, 3, 4, 5]].argsort(),]
+    detections_updated = detections
+    person_ids = np.unique(detections[:, 0])
+    count = 0
+    for i, person_id in enumerate(person_ids):
+        relevant_detections = detections[detections[:, 0] == person_id, :]
+        start_frame = np.min(relevant_detections[:, 1])
+        end_frame = np.max(relevant_detections[:, 1])
+
+        missing_frames = np.setdiff1d(np.arange(start_frame, end_frame), relevant_detections[:, 1])
+        if np.size(missing_frames) == 0:
+            continue
+        frame_diff = np.diff(missing_frames, n=1, axis=0) > 1
+        start_ind = np.hstack((1, frame_diff))
+        end_ind = np.hstack((frame_diff, 1))
+
+        start_ind = np.nonzero(start_ind)[0]
+        end_ind = np.nonzero(end_ind)[0]
+
+        for k in range(len(start_ind)):
+            inter_polated_detections = np.zeros((missing_frames[end_ind[k]]-missing_frames[start_ind[k]]+1, np.size(detections, 1)))
+
+            inter_polated_detections[:, 0] = person_id
+            inter_polated_detections[:, 1] = np.arange(missing_frames[start_ind[k]], missing_frames[end_ind[k]])
+
+            pre_detection = detections[(detections[:, 0] == person_id) * detections[:, 1]
+                                       == missing_frames[start_ind[k]]-1, :]
+            post_detection = detections[(detections[:, 0] == person_id) * detections[:, 1]
+                                        == missing_frames[end_ind[k]] + 1, :]
+
+            for c in range(2, np.size(detections, 1)):
+                inter_polated_detections[:, c] = np.linspace(pre_detection[c], post_detection[c],
+                                                             np.size(inter_polated_detections, 0))
+
+            detections_updated.append(inter_polated_detections)
+
+        count += 1
+    return detections_updated
 
 
 def solve_in_groups(configs, tracklets, labels):
@@ -21,8 +73,8 @@ def solve_in_groups(configs, tracklets, labels):
         # Increase number of groups until no group is too large to solve
         while True:
             params["appearance_groups"] += 1
-            apperance_feature, appearance_groups,_ = k_means(feature_vectors, n_clusters=params["appearance_groups"],
-                                                             n_jobs=-1)
+            apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["appearance_groups"],
+                                                              n_jobs=-1)
             uid, freq = list(zip(*Counter(appearance_groups).items()))
             largest_group_size = max(freq)
             # The BIP solver might run out of memory for large graphs
@@ -46,7 +98,8 @@ def solve_in_groups(configs, tracklets, labels):
         spacetime_affinity, impossibility_matrix, indifference_matrix = get_space_time_affinity(tracklets[indices],
                                                                                                 params["beta"],
                                                                                                 params["speed_limit"],
-                                                                                                params["indifference_time"])
+                                                                                                params[
+                                                                                                    "indifference_time"])
         # compute the correlation matrix
         correlation_matrix = appearance_affinity + spacetime_affinity - 1
         correlation_matrix = correlation_matrix * indifference_matrix
@@ -83,7 +136,7 @@ def find_trajectories_in_window(input_trajectories, start_time, end_time):
     trajecotry_start_frame = np.array([input_trajectory.start_frame for input_trajectory in input_trajectories],
                                       dtype=np.int)
     trajecotry_end_frame = np.array([input_trajectory.end_frame for input_trajectory in input_trajectories],
-                                      dtype=np.int)
+                                    dtype=np.int)
     trajectories_ind = np.where(np.logical_and(trajecotry_end_frame >= start_time, trajecotry_start_frame <= end_time))
     return trajectories_ind
 
@@ -117,7 +170,7 @@ def tracklets_to_trajectory(tracklets, labels):
 def create_trajectories(configs, input_trajectories, start_frame, end_frame):
     current_trajectories_ind = find_trajectories_in_window(input_trajectories, start_frame, end_frame)
     current_trajectories = input_trajectories[current_trajectories_ind]
-    if len(current_trajectories) <=1:
+    if len(current_trajectories) <= 1:
         out_trajectories = input_trajectories
         return out_trajectories
 
@@ -131,16 +184,16 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
             tracklets.append(tracklet)
             tracklet_labels.append(i)
 
-            if j >= len(current_trajectory.tracklets)-4:
+            if j >= len(current_trajectory.tracklets) - 4:
                 is_assocations.append(True)
             else:
                 is_assocations.append(False)
 
     # solve the graph partitioning problem for each appearance group
     result = solve_in_groups(configs,
-                             [tracklet for tracklet, is_assocation in zip(tracklets, is_assocations) if is_assocation],
-                             [tracklet_label for tracklet_label, is_assocation in zip(tracklet_labels, is_assocations)
-                              if is_assocation])
+                             list(compress(tracklets, is_assocations)),
+                             np.array(list(compress(tracklet_labels, is_assocations)))
+                             )
 
     # merge back solution. Tracklets that were associated are now merged back
     # with the rest of tracklets that were sharing the same trajectory
@@ -162,3 +215,23 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
 
     # show merged tracklets in window
     # TODO visualize
+
+
+def recompute_trajectories(new_trajectories):
+    segment_length = 50
+
+    for i, trajectory in enumerate(new_trajectories):
+        segment_start = trajectory.segment_start
+        segment_end = trajectory.segment_end
+
+        num_segments = (segment_end + 1 - segment_start) / segment_length
+
+        #TODO
+
+
+
+
+
+
+
+
