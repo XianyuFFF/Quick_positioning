@@ -4,6 +4,10 @@ from scipy.spatial.distance import pdist, cdist
 from scipy.cluster.hierarchy import linkage, fcluster
 
 
+def sigmoid(x, a, c):
+    s = 1/(1+np.exp(-a*(x-c)))
+    return s
+
 def get_bounding_box_centers(bounding_boxs):
     centers = np.vstack(
         (bounding_boxs[:, 0] + 0.5 * bounding_boxs[:, 2],
@@ -64,24 +68,24 @@ def estimated_velocities(original_detections, start_frame, end_frame, nearest_ne
     return estimated_velocities_
 
 
-def get_spatial_group_id(use_grouping, current_detection_IDX, detection_centers, params):
+def get_spatial_group_id(use_grouping, current_detection_idx, detection_centers, params):
 
     if use_grouping is True:
         pairwise_distance = cdist(detection_centers, detection_centers)
         agglomeration = linkage(pairwise_distance)
-        num_spatial_groups = round(params['cluster_coeff'] * len(current_detection_IDX) / params['window_width'])
+        num_spatial_groups = round(params['cluster_coeff'] * len(current_detection_idx) / params['window_width'])
         num_spatial_groups = max(num_spatial_groups, 0)
 
         while True:
-            spatial_group_IDs = fcluster(agglomeration, criterion='maxclust', t=num_spatial_groups)
-            uid = np.unique(spatial_group_IDs)
-            freq = np.hstack((np.histogram(spatial_group_IDs.flatten()), uid))
+            spatial_group_ids = fcluster(agglomeration, criterion='maxclust', t=num_spatial_groups)
+            uid = np.unique(spatial_group_ids)
+            freq = np.hstack((np.histogram(spatial_group_ids.flatten()), uid))
 
             largest_group_size = len(freq)
 
             # The BIP solver might run out of memory for large graph
             if largest_group_size <= 150:
-                return spatial_group_IDs
+                return spatial_group_ids
             num_spatial_groups += 1
 
 
@@ -90,6 +94,7 @@ def get_appearance_sub_matrix(spatial_group_observations, features_vectors, thre
     dist = cdist(features, features)
     correlation = (threshold - dist) / threshold
     return correlation
+
 
 def motion_affinity(detection_centers, detection_frames, estimated_velocity, speed_limit, beta):
     # This function compute the motion affinities given a set of detections
@@ -122,12 +127,14 @@ def motion_affinity(detection_centers, detection_frames, estimated_velocity, spe
     y_diff = center_Y - center_Y.conj().T
     distance_matrix = np.sqrt(x_diff**2 + y_diff ** 2)
 
-    max_required_speed_matrix = np.divide(distance_matrix, np.abs(frame_difference), out=np.zeros_like(distance_matrix), where=frame_difference!=0)
+    max_required_speed_matrix = np.divide(distance_matrix, np.abs(frame_difference),
+                                          out=np.zeros_like(distance_matrix), where=frame_difference != 0)
     prediction_error[max_required_speed_matrix > speed_limit] = np.inf
     impossibility_matrix[max_required_speed_matrix > speed_limit] = 1
 
     motion_scores = 1 - beta * prediction_error
     return motion_scores, impossibility_matrix
+
 
 def sub2ind(array_shape, rows, cols):
     return rows*array_shape[1] + cols
@@ -172,10 +179,77 @@ def get_tracklets_features(tracklets, frame_index=1):
     return centers_world, centers_view, startpoint, endpoint, intervals, duration, velocity
 
 
+def overlap_test(interval1, interval2):
+    duration1 = interval2[1] - interval1[0]
+    duration2 = interval2[:, 1] - interval2[:, 0]
+
+    i1 = np.tile(interval1, (1, np.size(interval2, 0)))
+    union_min = np.min(np.hstack((i1, interval2)), axis=1)
+    union_max = np.max(np.hstack((i1, interval2)), axis=1)
+
+    overlap = np.asarray((duration1 + duration2 - union_max + union_min) >= 0, dtype=np.float32)
+    # overlap = (duration1 + duration2 - union_max + union_min) >= 0
+    return overlap
+
+
 def get_space_time_affinity(tracklets, beta, speed_limit, indifference_limit):
     num_tracklets = len(tracklets)
     _, _, startpoint, endpoint, intervals, _, velocity = get_tracklets_features(tracklets)
+
     center_frame = np.round(np.mean(intervals, axis=1))
+    frame_difference = cdist(center_frame, center_frame, lambda x, y: x-y)
+    overlapping = cdist(intervals, intervals, overlap_test)
+    centers = 0.5 * (endpoint + startpoint)
+    centers_distance = cdist(centers, centers)
+    v = np.logical_or(frame_difference > 0, overlapping)
+    merging = np.logical_and(centers_distance < 5, overlapping)
 
-    #TODO
+    velocity_x = np.tile(velocity[:, 0], (num_tracklets, 1))
+    velocity_y = np.tile(velocity[:, 1], (num_tracklets, 1))
 
+    start_x = np.tile(centers[:, 0], (num_tracklets, 1))
+    start_y = np.tile(centers[:, 1], (num_tracklets, 1))
+    end_x = np.tile(centers[:, 0], (num_tracklets, 1))
+    end_y = np.tile(centers[:, 1], (num_tracklets, 1))
+
+    error_x_forward = end_x + velocity_x * frame_difference - start_x.conj().T
+    error_y_forward = end_y + velocity_y * frame_difference - start_y.conj().T
+
+    error_x_backward = start_x.conj().T + velocity_x.conj().T * -frame_difference - end_x
+    error_y_backward = start_y.conj().T + velocity_y.conj().T * -frame_difference - end_y
+
+    error_forward = np.sqrt(error_x_forward**2 + error_y_forward**2)
+    error_backward = np.sqrt(error_x_backward**2 + error_y_backward**2)
+
+    # check if speed limit is violated
+    x_diff = end_x - start_x.conj().T
+    y_diff = end_y - start_y.conj().T
+    distance_matrix = np.sqrt(x_diff**2 + y_diff**2)
+    max_speed_matrix = distance_matrix / np.abs(frame_difference)
+
+    violators = np.asarray(max_speed_matrix > speed_limit)
+    violators[np.where(np.logical_not(v))[0]] = 0
+    violators = violators + violators.conj().T
+
+    # build impossibility matrix
+    impossibility_matrix = np.zeros((num_tracklets, num_tracklets))
+    impossibility_matrix[np.logical_and(violators == 1, merging != 1)] = 1
+    impossibility_matrix[np.logical_and(overlapping==1, merging != 1)] = 1
+
+    # this is a symmetric matrix, although tracklets are oriented in time
+    error_matrix = np.minimum(error_forward, error_backward)
+    error_matrix = error_matrix * v
+    error_matrix[np.logical_not(v)] = 0
+    error_matrix = error_matrix + error_matrix.conj().T
+    error_matrix[violators == 1] = np.inf
+
+    # compute indifference matrix
+    time_difference = frame_difference * (frame_difference > 0)
+    time_difference = time_difference + time_difference.conj().T
+    indiff_matrix = 1 - sigmoid(time_difference, 0.1, indifference_limit/2)
+
+    # compute space-time affinities
+    st_affinity = 1 - beta * error_matrix
+    st_affinity = np.maximum(0, st_affinity)
+
+    return st_affinity, impossibility_matrix, indiff_matrix

@@ -2,8 +2,10 @@ import numpy as np
 from sklearn.cluster import k_means
 from scipy.spatial.distance import cdist
 from collections import Counter
+import time
 
-from utils import get_appearance_matrix
+from utils import get_appearance_matrix, get_space_time_affinity
+from L1_tracklets.KernighanLin import KernighanLin
 
 
 def solve_in_groups(configs, tracklets, labels):
@@ -27,10 +29,13 @@ def solve_in_groups(configs, tracklets, labels):
             if largest_group_size <= 150:
                 break
     else:
+        # fixed number of appearance groups
         apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["appearance_groups"],
                                                           n_jobs=-1)
+    # solve separately for each appearance group
     all_groups = np.unique(appearance_groups)
 
+    result_appearance = []
     for i, group in enumerate(all_groups):
         print("merging tracklets in appearance group {}\n".format(i))
         indices = np.nonzero(appearance_groups == group)
@@ -42,23 +47,36 @@ def solve_in_groups(configs, tracklets, labels):
                                                                                                 params["beta"],
                                                                                                 params["speed_limit"],
                                                                                                 params["indifference_time"])
+        # compute the correlation matrix
+        correlation_matrix = appearance_affinity + spacetime_affinity - 1
+        correlation_matrix = correlation_matrix * indifference_matrix
+
+        correlation_matrix[impossibility_matrix == 1] = -np.inf
+        correlation_matrix[same_labels] = 1
+
+        # just use KL optimizer now
+        labels = KernighanLin(correlation_matrix)
+        result_appearance.append({"labels": labels, "observations": indices})
+
+        result = {"labels": [], "observations": []}
+
+        for i in range(np.size(np.unique(appearance_groups))):
+            merge_results(result, result_appearance[i])
+
+        # ToDO edit
+        id_ = sorted(result["observations"])
+        result["observations"] = result["observations"][id_]
+        result["labels"] = result["labels"][id_]
+        return result
 
 
+def merge_results(result1, result2):
+    maxinum_label = np.max(result1.labels)
+    if np.size(maxinum_label) == 0:
+        maxinum_label = 0
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    result1["labels"].append(maxinum_label + result2["labels"])
+    result1["observations"].append(result2["observations"])
 
 
 def find_trajectories_in_window(input_trajectories, start_time, end_time):
@@ -105,7 +123,7 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
 
     # select tracklets that will be selected in association.For previously
     # computed trajectories we select only the last three tracklets.
-    is_assocation = []
+    is_assocations = []
     tracklets = []
     tracklet_labels = []
     for i, current_trajectory in enumerate(current_trajectories):
@@ -114,11 +132,33 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
             tracklet_labels.append(i)
 
             if j >= len(current_trajectory.tracklets)-4:
-                is_assocation.append(True)
+                is_assocations.append(True)
             else:
-                is_assocation.append(False)
+                is_assocations.append(False)
 
-    is_assocation = np.array(is_assocation)
-    result = solve_in_groups(configs, tracklets[is_assocation], tracklet_labels[is_assocation])
+    # solve the graph partitioning problem for each appearance group
+    result = solve_in_groups(configs,
+                             [tracklet for tracklet, is_assocation in zip(tracklets, is_assocations) if is_assocation],
+                             [tracklet_label for tracklet_label, is_assocation in zip(tracklet_labels, is_assocations)
+                              if is_assocation])
 
+    # merge back solution. Tracklets that were associated are now merged back
+    # with the rest of tracklets that were sharing the same trajectory
+    labels = tracklet_labels
+    # labels[is_assocations] = result["labels"]
 
+    count = 0
+    for i, is_assocation in enumerate(is_assocations):
+        if is_assocation:
+            labels[tracklet_labels == tracklet_labels[i]] = result["labels"][count]
+            count += 1
+    # merge co-identified tracklets to extended tracklets
+    new_trajectories = tracklets_to_trajectory(tracklets, labels)
+    smooth_trajectories = recompute_trajectories(new_trajectories)
+
+    output_trajectories = input_trajectories
+    np.delete(output_trajectories, current_trajectories_ind)
+    output_trajectories = np.vstack(output_trajectories, smooth_trajectories)
+
+    # show merged tracklets in window
+    # TODO visualize
