@@ -19,6 +19,21 @@ def trajectories_to_top(trajectories):
     return data
 
 
+def remove_short_tracks(detections, cutoff_length):
+    # This function removes short tracks that have not been associated with
+    # any trajectory. Those are likely to be false positives.
+    detections_updated = detections
+    detections = detections[detections[:, [0, 1]].argsort(),]
+    person_ids = np.unique(detections[:, 0])
+    lengths = np.histogram(detections[:, 0], person_ids)
+
+    a = person_ids * (lengths < cutoff_length)
+    removed_ids = np.extract(a != 0, a)
+    np.delete(detections_updated, np.array([person_id for person_id in detections_updated[:, 0]
+                                            if person_id in removed_ids]))
+    return detections_updated
+
+
 def fill_trajectories(detections):
     detections = detections[detections[:, [1, 2, 3, 4, 5]].argsort(),]
     detections_updated = detections
@@ -40,13 +55,14 @@ def fill_trajectories(detections):
         end_ind = np.nonzero(end_ind)[0]
 
         for k in range(len(start_ind)):
-            inter_polated_detections = np.zeros((missing_frames[end_ind[k]]-missing_frames[start_ind[k]]+1, np.size(detections, 1)))
+            inter_polated_detections = np.zeros(
+                (missing_frames[end_ind[k]] - missing_frames[start_ind[k]] + 1, np.size(detections, 1)))
 
             inter_polated_detections[:, 0] = person_id
             inter_polated_detections[:, 1] = np.arange(missing_frames[start_ind[k]], missing_frames[end_ind[k]])
 
             pre_detection = detections[(detections[:, 0] == person_id) * detections[:, 1]
-                                       == missing_frames[start_ind[k]]-1, :]
+                                       == missing_frames[start_ind[k]] - 1, :]
             post_detection = detections[(detections[:, 0] == person_id) * detections[:, 1]
                                         == missing_frames[end_ind[k]] + 1, :]
 
@@ -226,7 +242,33 @@ def recompute_trajectories(new_trajectories):
 
         num_segments = (segment_end + 1 - segment_start) / segment_length
 
-        #TODO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
