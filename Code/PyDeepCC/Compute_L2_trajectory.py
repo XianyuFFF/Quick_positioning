@@ -1,6 +1,8 @@
 from Trajectory import *
 from config_default import configs
-
+import pickle
+import os
+from L1_tracklets import SmoothedTracklet
 
 def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
     trajectories_from_tracklets = tracklets_to_trajectory(tracklets, list(range(1, len(tracklets)+1)))
@@ -23,3 +25,15 @@ def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
     tracker_output_removed[:, 0] = index
     tracker_output = tracker_output_removed[tracker_output_removed[:, [0, 1]].argsort(),]
     return tracker_output
+
+
+if __name__ == '__main__':
+    print(os.getcwd())
+    if os.path.getsize("tracklets") > 0:
+        with open("tracklets", 'rb') as dbfile:
+            tracklets = pickle.load(dbfile)
+    start_frame = 122178
+    end_frame = 181998
+    compute_L2_trajectories(configs, tracklets, start_frame, end_frame)
+
+

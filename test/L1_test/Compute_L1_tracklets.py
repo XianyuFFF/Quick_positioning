@@ -2,11 +2,12 @@ import h5py
 import os
 import numpy as np
 import scipy.io as sio
+import pickle
 
 from L1_tracklets import get_valid_detections, create_tracklets
 from duke_utils import load_detections_openpose_json
 from config_default import configs
-# import hyperspy.api as hs
+
 
 dataset_path = configs['dataset_path']
 detections_path = os.path.join(dataset_path, 'detections', 'OpenPose')
@@ -59,7 +60,8 @@ if __name__ == '__main__':
     features = h5py.File('test_data/features1.h5', 'r')['emb']
     detections = h5py.File('test_data/camera1.mat', 'r')['detections']
 
-    print(features)
-    print(detections)
+    tracklets = compute_L1_tracklets(features, detections, start_frame, end_frame)
 
-    compute_L1_tracklets(features, detections, start_frame, end_frame)
+    with open('tracklets', 'ab') as dbfile:
+        pickle.dump(tracklets, dbfile)
+
