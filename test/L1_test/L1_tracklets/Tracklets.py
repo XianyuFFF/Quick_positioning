@@ -42,7 +42,7 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
             continue
 
         interval_length = int(finish - start + 1)
-        datapoints = np.linspace(start, finish, interval_length)
+        datapoints = np.arange(start, finish, interval_length)
         frames = detections[:, frame_index]
 
         current_tracklet = np.zeros((interval_length, np.size(tracklets, 1)))
@@ -61,7 +61,7 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
         center_point_world = 1
 
         smoothed_tracklet = SmoothedTracklet(median_feature, center_point, center_point_world, current_tracklet,
-                                             feature_apperance[mask], detections, mask, start, finish, current_interval,
+                                             feature_apperance, detections, mask, start, finish, current_interval,
                                              segement_start, segment_interval, segment_interval + segement_start - 1)
 
         smoothed_tracklets.append(smoothed_tracklet)
@@ -74,7 +74,7 @@ def create_tracklets(configs, original_detections, all_features, start_frame, en
         np.logical_and(original_detections_frames
                        >=
                        start_frame, original_detections_frames < end_frame)
-        )[0]
+    )[0]
 
     params = configs['tracklets']
     if len(current_detections_idx) < 2:

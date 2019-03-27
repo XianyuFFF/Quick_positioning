@@ -3,7 +3,9 @@ import shutil
 from config_default import configs
 
 video_dir = "../../Src/view-Contour2.mp4"
+output_video_dir = "../../Src/view-Contour2-out.mp4"
 output_snippets_dir = "../../Src/view-Contour2"
+
 
 openpose = configs['openpose']
 
@@ -12,7 +14,8 @@ openpose_args = dict(
                 write_json=output_snippets_dir,
                 display=0,
                 render_pose=0,
-                # maximize_positives=True,
+                maximize_positives=True,
+                write_video=output_video_dir,
                 model_pose='COCO',
                 net_resolution="-1x480",
                 model_folder=configs['openpose_model_folder'])

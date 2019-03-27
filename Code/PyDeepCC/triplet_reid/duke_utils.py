@@ -177,7 +177,7 @@ def pose2bb(pose):
     A = np.vstack((np.column_stack((points_reference[:, 0], np.zeros((M)), np.ones((M)), np.zeros((M)))),
                    np.column_stack((np.zeros((M)), points_reference[:, 1], np.zeros((M)), np.ones((M))))))
 
-    params = np.linalg.lstsq(A, B)
+    params = np.linalg.lstsq(A, B, rcond=None)
     params = params[0]
     M = 2
     A2 = np.vstack((np.column_stack((ref_bb[:, 0], np.zeros((M)), np.ones((M)), np.zeros((M)))),
@@ -196,10 +196,10 @@ def pose2bb(pose):
     right = max(base_right, fit_right)
     bottom = max(base_bottom, fit_bottom)
 
-    # left = left * 1920
-    # top = top * 1080
-    # right = right * 1920
-    # bottom = bottom * 1080
+    left = left * 1920
+    top = top * 1080
+    right = right * 1920
+    bottom = bottom * 1080
 
     height = bottom - top + 1
     width = right - left + 1

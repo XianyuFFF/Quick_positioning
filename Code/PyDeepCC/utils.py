@@ -1,12 +1,47 @@
 import numpy as np
 import numpy.linalg as LA
+from collections import Counter
 from scipy.spatial.distance import pdist, cdist
 from scipy.cluster.hierarchy import linkage, fcluster
+import cv2
 
 
 def sigmoid(x, a, c):
     s = 1/(1+np.exp(-a*(x-c)))
     return s
+
+
+def visiual_tracklets(tracklets, video):
+    frame_base_detections = {}
+    for i, tracklet in enumerate(tracklets):
+        for j, frame in enumerate(range(int(tracklet.start), int(tracklet.finish))):
+            if frame_base_detections.get(frame):
+                frame_base_detections[frame].append([i, tracklet.data[frame-int(tracklet.start)]])
+            else:
+                frame_base_detections[frame] = [[i, tracklet.data[frame-int(tracklet.start)]]]
+
+    print(frame_base_detections)
+
+    cap = cv2.VideoCapture(video)
+
+    i = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        detections = frame_base_detections.get(i)
+        if detections:
+            for k, detection in enumerate(detections):
+                id_, det = detection
+                _, _, x, y, w, h = det
+                cv2.rectangle(frame, (int(x), int(y)), (int(x+w), int(y+h)), (i*17 % 255, i*31 % 255, i*53 % 255))
+
+        cv2.imshow('result', frame)
+        cv2.waitKey(100)
+
+        i += 1
+
+
 
 def get_bounding_box_centers(bounding_boxs):
     centers = np.vstack(
@@ -78,10 +113,8 @@ def get_spatial_group_id(use_grouping, current_detection_idx, detection_centers,
 
         while True:
             spatial_group_ids = fcluster(agglomeration, criterion='maxclust', t=num_spatial_groups)
-            uid = np.unique(spatial_group_ids)
-            freq = np.hstack((np.histogram(spatial_group_ids.flatten()), uid))
-
-            largest_group_size = len(freq)
+            freq = [num for id_, num in Counter(spatial_group_ids).items()]
+            largest_group_size = max(freq)
 
             # The BIP solver might run out of memory for large graph
             if largest_group_size <= 150:
