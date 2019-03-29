@@ -20,6 +20,7 @@ def recompute_trajectories(trajectories):
         num_segments = (segment_end + 1 - segment_start) / segment_length
         all_data = np.asarray([tracklet.data for tracklet in trajectory.tracklets])
         all_data = all_data[all_data[:, 0].argsort()]
+        # TODO
 
 
 
@@ -149,25 +150,27 @@ def solve_in_groups(configs, tracklets, labels):
         labels = KernighanLin(correlation_matrix)
         result_appearance.append({"labels": labels, "observations": indices})
 
-        result = {"labels": [], "observations": []}
+    result = {"labels": [], "observations": []}
 
-        for i in range(np.size(np.unique(appearance_groups))):
-            merge_results(result, result_appearance[i])
+    for i in range(np.size(np.unique(appearance_groups))):
+        merge_results(result, result_appearance[i])
 
-        # ToDO edit
-        id_ = sorted(result["observations"])
-        result["observations"] = result["observations"][id_]
-        result["labels"] = result["labels"][id_]
-        return result
+    sorted_result = np.asarray(sorted(zip(result["labels"], result["observations"]), key=lambda x: x[1]))
+
+    result["observations"] = sorted_result[:, 1]
+    result["labels"] = sorted_result[:, 0]
+
+    return result
 
 
 def merge_results(result1, result2):
-    maxinum_label = np.max(result1.labels)
-    if np.size(maxinum_label) == 0:
+    if np.size(result1["labels"]) == 0:
         maxinum_label = 0
+    else:
+        maxinum_label = np.max(result1["labels"])
 
-    result1["labels"].append(maxinum_label + result2["labels"])
-    result1["observations"].append(result2["observations"])
+    result1["labels"].extend(maxinum_label + result2["labels"])
+    result1["observations"].extend(result2["observations"])
 
 
 def find_trajectories_in_window(input_trajectories, start_time, end_time):
@@ -201,6 +204,7 @@ def tracklets_to_trajectory(tracklets, labels):
             trajectory.start_frame = min(trajectory.start_frame, tracklets[ind].start)
             trajectory.end_frame = max(trajectory.end_frame, tracklets[ind].finish)
             trajectory.segment_start = min(trajectory.segment_start, tracklets[ind].segment_start)
+            trajectory.segment_end = max(trajectory.segment_end, tracklets[ind].segment_end)
             trajectory.feature = tracklets[ind].feature
         trajectories.append(trajectory)
     return trajectories

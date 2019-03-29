@@ -47,7 +47,7 @@ def smooth_tracklets(tracklets, segement_start, segment_interval, feature_appera
 
         current_tracklet = np.zeros((interval_length, np.size(tracklets, 1)))
         current_tracklet[:, frame_index - 1] = np.ones(interval_length) * tracklet_ids[i]
-        current_tracklet[:, frame_index] = np.linspace(start, finish)
+        current_tracklet[:, frame_index] = np.arange(start, finish+1)
 
         for k in range(frame_index + 1, np.size(tracklets, 1)):
             points = detections[:, k]
