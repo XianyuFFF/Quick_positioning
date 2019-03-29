@@ -9,6 +9,26 @@ from utils import get_appearance_matrix, get_space_time_affinity
 from L1_tracklets.KernighanLin import KernighanLin
 
 
+
+def recompute_trajectories(trajectories):
+    segment_length = 50
+
+    for i, trajectory in enumerate(trajectories):
+        segment_start = trajectory.segment_start
+        segment_end = trajectory.segment_end
+
+        num_segments = (segment_end + 1 - segment_start) / segment_length
+        all_data = np.asarray([tracklet.data for tracklet in trajectory.tracklets])
+        all_data = all_data[all_data[:, 0].argsort()]
+
+
+
+
+
+
+
+
+
 def trajectories_to_top(trajectories):
     data = []
     for i, trajectory in enumerate(trajectories):
@@ -78,18 +98,18 @@ def fill_trajectories(detections):
 
 def solve_in_groups(configs, tracklets, labels):
     params = configs["trajectories"]
-    if len(tracklets) < params["appearance_groups"]:
-        configs['appearance_groups'] = 1
+    if len(tracklets) < params["apperance_groups"]:
+        configs['apperance_groups'] = 1
 
-    feature_vectors = np.array([tracklet.feature for tracklet in tracklets])
+    feature_vectors = np.array([tracklet.feature for tracklet in tracklets], dtype=np.float64)
     feature_vectors = np.reshape(feature_vectors, (len(tracklets), 128))
 
     # adaptive number of appearance groups
-    if params["appearance_groups"] == 0:
+    if params["apperance_groups"] == 0:
         # Increase number of groups until no group is too large to solve
         while True:
-            params["appearance_groups"] += 1
-            apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["appearance_groups"],
+            params["apperance_groups"] += 1
+            apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
                                                               n_jobs=-1)
             uid, freq = list(zip(*Counter(appearance_groups).items()))
             largest_group_size = max(freq)
@@ -98,7 +118,7 @@ def solve_in_groups(configs, tracklets, labels):
                 break
     else:
         # fixed number of appearance groups
-        apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["appearance_groups"],
+        apperance_feature, appearance_groups, _ = k_means(feature_vectors, n_clusters=params["apperance_groups"],
                                                           n_jobs=-1)
     # solve separately for each appearance group
     all_groups = np.unique(appearance_groups)
@@ -106,16 +126,18 @@ def solve_in_groups(configs, tracklets, labels):
     result_appearance = []
     for i, group in enumerate(all_groups):
         print("merging tracklets in appearance group {}\n".format(i))
-        indices = np.nonzero(appearance_groups == group)
-        same_labels = cdist(labels[indices], labels[indices]) == 0
+        indices = np.nonzero(appearance_groups == group)[0]
+        labels_ = np.asarray(labels)[indices].reshape(-1, 1)
+        same_labels = cdist(labels_, labels_) == 0
 
         # compute appearance and spacetime scores
         appearance_affinity = get_appearance_matrix(feature_vectors[indices], params["threshold"])
-        spacetime_affinity, impossibility_matrix, indifference_matrix = get_space_time_affinity(tracklets[indices],
+        spacetime_affinity, impossibility_matrix, indifference_matrix = get_space_time_affinity([tracklets[i] for
+                                                                                                 i in indices],
                                                                                                 params["beta"],
                                                                                                 params["speed_limit"],
                                                                                                 params[
-                                                                                                    "indifference_time"])
+                                                                                                    "indifferent_time"])
         # compute the correlation matrix
         correlation_matrix = appearance_affinity + spacetime_affinity - 1
         correlation_matrix = correlation_matrix * indifference_matrix
@@ -153,7 +175,8 @@ def find_trajectories_in_window(input_trajectories, start_time, end_time):
                                       dtype=np.int)
     trajecotry_end_frame = np.array([input_trajectory.end_frame for input_trajectory in input_trajectories],
                                     dtype=np.int)
-    trajectories_ind = np.where(np.logical_and(trajecotry_end_frame >= start_time, trajecotry_start_frame <= end_time))
+    trajectories_ind = np.where(np.logical_and(trajecotry_end_frame >= start_time, trajecotry_start_frame <= end_time))[
+        0]
     return trajectories_ind
 
 
@@ -172,7 +195,7 @@ def tracklets_to_trajectory(tracklets, labels):
     trajectories = []
     for i, label in enumerate(unique_labels):
         trajectory = Trajectory(np.inf, -np.inf, np.inf, -np.inf)
-        tracklet_indices = np.nonzero(labels == label)
+        tracklet_indices = np.nonzero(labels == label)[0]
         for j, ind in enumerate(tracklet_indices):
             trajectory.tracklets.append(tracklets[ind])
             trajectory.start_frame = min(trajectory.start_frame, tracklets[ind].start)
@@ -185,7 +208,8 @@ def tracklets_to_trajectory(tracklets, labels):
 
 def create_trajectories(configs, input_trajectories, start_frame, end_frame):
     current_trajectories_ind = find_trajectories_in_window(input_trajectories, start_frame, end_frame)
-    current_trajectories = input_trajectories[current_trajectories_ind]
+    current_trajectories = [input_trajectories[ind] for ind in current_trajectories_ind]
+
     if len(current_trajectories) <= 1:
         out_trajectories = input_trajectories
         return out_trajectories
@@ -221,8 +245,10 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
         if is_assocation:
             labels[tracklet_labels == tracklet_labels[i]] = result["labels"][count]
             count += 1
+
     # merge co-identified tracklets to extended tracklets
     new_trajectories = tracklets_to_trajectory(tracklets, labels)
+
     smooth_trajectories = recompute_trajectories(new_trajectories)
 
     output_trajectories = input_trajectories
@@ -231,22 +257,6 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
 
     # show merged tracklets in window
     # TODO visualize
-
-
-def recompute_trajectories(new_trajectories):
-    segment_length = 50
-
-    for i, trajectory in enumerate(new_trajectories):
-        segment_start = trajectory.segment_start
-        segment_end = trajectory.segment_end
-
-        num_segments = (segment_end + 1 - segment_start) / segment_length
-
-
-
-
-
-
 
 
 

@@ -184,6 +184,14 @@ def get_tracklets_features(tracklets, frame_index=1):
     # bounding box center for each tracklet
     centers_world = {}
     centers_view = {}
+
+    velocity = np.zeros((num_tracklets, 2))
+    duration = np.zeros((num_tracklets, 1))
+    intervals = np.zeros((num_tracklets, 2))
+    startpoint = np.zeros((num_tracklets, 2))
+    endpoint = np.zeros((num_tracklets, 2))
+    direction = np.zeros((num_tracklets, 2))
+
     for i, tracklet in enumerate(tracklets):
         detections = tracklet.data
         # 2d points
@@ -191,45 +199,34 @@ def get_tracklets_features(tracklets, frame_index=1):
         x = 0.5 * bb[:, 0] + bb[:, 2]
         y = 0.5 * bb[:, 1] + bb[:, 3]
         t = bb[:, 4]
-        centers_view[i] = np.vstack((x,y,t)).T
+        centers_view[i] = np.vstack((x, y, t)).T
         # 3d points
         centers_world[i] = centers_view[i]
+        intervals[i, :] = [t[0], t[-1]]
+        startpoint[i, :] = [x[0], y[0]]
+        endpoint[i, :] = [x[-1], y[-1]]
 
-    velocity = np.zeros((num_tracklets, 2))
-    duration = np.zeros((num_tracklets, 1))
-    intervals = np.zeros((num_tracklets, 2))
-    startpoint = np.zeros((num_tracklets, 2))
-    endpoint = np.zeros((num_tracklets, 2))
+        duration[i] = t[-1] - t[0]
+        direction[i, :] = endpoint[i, :] - startpoint[i, :]
+        velocity[i, :] = direction[i] / duration[i]
 
-    for ind in range(num_tracklets):
-        intervals[ind, :] = np.hstack((centers_world[ind][0, 2], centers_world[ind][-1, 2]))
-        startpoint[ind, :] = np.hstack((centers_world[ind][0, 0], centers_world[ind][0, 1]))
-        endpoint[ind, :] = np.hstack((centers_world[ind][-1, 0], centers_world[ind][-1, 1]))
-
-        duration[ind] = centers_world[ind][-1, 2] - centers_world[ind][0, 2]
-        direction = endpoint[ind, :] - startpoint[ind, :]
-        velocity[ind, :] = direction / duration[ind]
     return centers_world, centers_view, startpoint, endpoint, intervals, duration, velocity
 
 
 def overlap_test(interval1, interval2):
-    duration1 = interval2[1] - interval1[0]
-    duration2 = interval2[:, 1] - interval2[:, 0]
-
-    i1 = np.tile(interval1, (1, np.size(interval2, 0)))
-    union_min = np.min(np.hstack((i1, interval2)), axis=1)
-    union_max = np.max(np.hstack((i1, interval2)), axis=1)
-
-    overlap = np.asarray((duration1 + duration2 - union_max + union_min) >= 0, dtype=np.float32)
-    # overlap = (duration1 + duration2 - union_max + union_min) >= 0
-    return overlap
+    i1_start, i1_end = interval1
+    i2_start, i2_end = interval2
+    if max(i1_start, i2_start) <= min(i1_end, i2_end):
+        return True
+    else:
+        return False
 
 
 def get_space_time_affinity(tracklets, beta, speed_limit, indifference_limit):
     num_tracklets = len(tracklets)
     _, _, startpoint, endpoint, intervals, _, velocity = get_tracklets_features(tracklets)
 
-    center_frame = np.round(np.mean(intervals, axis=1))
+    center_frame = np.round(np.mean(intervals, axis=1)).reshape((-1, 1))
     frame_difference = cdist(center_frame, center_frame, lambda x, y: x-y)
     overlapping = cdist(intervals, intervals, overlap_test)
     centers = 0.5 * (endpoint + startpoint)

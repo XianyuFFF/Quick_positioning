@@ -6,7 +6,7 @@ import networkx as nx
 
 def KernighanLin(correlation_matrix):
     if np.size(correlation_matrix, 0) == 1:
-        return [1]
+        return np.array([1])
     upper_tri = np.triu(np.ones_like(correlation_matrix))
     source_node, target_node = np.nonzero(upper_tri)
     values = correlation_matrix[upper_tri != 0]

@@ -39,7 +39,7 @@ configs = {
         "apperance_groups": 0,
         "alpha": 1,
         "beta": 0.01,
-        "widow_width": 300,
+        "window_width": 300,
         "overlap": 150,
         "speed_limit": 30,
         "indifferent_time": 100,

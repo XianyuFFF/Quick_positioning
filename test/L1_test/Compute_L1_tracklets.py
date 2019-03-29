@@ -21,13 +21,13 @@ def compute_L1_tracklets(features, detections, start_frame, end_frame):
     # detections = load_detections_openpose_json(detections_path)
 
     all_dets = detections
-
+    all_det_frames = all_dets[frame_index, :]
     tracklets = []
 
     for window_start_frame in range(start_frame, end_frame + 1, params['window_width']):
         window_end_frame = window_start_frame + params['window_width']
 
-        window_inds = np.where(np.logical_and(all_dets[frame_index, :] < window_end_frame, all_dets[frame_index, :] >= window_start_frame))[0]
+        window_inds = np.where(np.logical_and(all_det_frames < window_end_frame, all_det_frames >= window_start_frame))[0]
 
         detections_in_window = np.copy(all_dets[:, window_inds]).T
 
