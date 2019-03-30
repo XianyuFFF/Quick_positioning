@@ -28,9 +28,10 @@ def compute_L2_trajectories(configs, tracklets, start_frame, end_frame):
     tracker_output_removed = remove_short_tracks(tracker_output_filled,
                                                  trajectory_config['minimum_trajectory_length'])
 
-    _, index = np.unique(tracker_output_removed[:, 0], return_inverse=True)
-    tracker_output_removed[:, 0] = index
-    tracker_output = tracker_output_removed[tracker_output_removed[:, [0, 1]].argsort(),]
+    _, index = np.unique(tracker_output_removed[:, 1], return_inverse=True)
+    tracker_output_removed[:, 1] = index
+    tracker_output = tracker_output_removed[np.lexsort(tracker_output_removed[:, 1], tracker_output_removed[:, 0]), :]
+
     return tracker_output
 
 

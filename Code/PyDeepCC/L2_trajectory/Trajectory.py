@@ -9,7 +9,6 @@ from utils import get_appearance_matrix, get_space_time_affinity
 from L1_tracklets.KernighanLin import KernighanLin
 
 
-
 def recompute_trajectories(trajectories):
     segment_length = 50
 
@@ -17,17 +16,45 @@ def recompute_trajectories(trajectories):
         segment_start = trajectory.segment_start
         segment_end = trajectory.segment_end
 
-        num_segments = (segment_end + 1 - segment_start) / segment_length
-        all_data = np.asarray([tracklet.data for tracklet in trajectory.tracklets])
-        all_data = all_data[all_data[:, 0].argsort()]
-        # TODO
+        num_segments = int((segment_end + 1 - segment_start) / segment_length)
+        all_data = np.asarray([np.asarray(tracklet.data) for tracklet in trajectory.tracklets])[0]
+        all_data = all_data[all_data[:, 1].argsort()]
 
+        rows = np.unique(all_data[:, 1], return_index=True)[1]
+        all_data = all_data[rows, :]
+        data_frames = all_data[:, 1]
+        interesting_frames = np.round(np.hstack((min(data_frames), np.arange( segment_start + segment_length/2,
+                                                                              segment_end, segment_length),
+                                                 max(data_frames))))
 
+        key_data = all_data[list(map(lambda x: x in interesting_frames, data_frames)), :]
+        key_data[:, 0] = -1
+        new_data = fill_trajectories(key_data)
 
+        new_trajectory = trajectories[i]
+        sample_tracklet = trajectory.tracklets[0]
+        new_trajectory.tracklets = []
 
+        for k in range(num_segments):
+            tracklet = sample_tracklet
+            tracklet.segment_start = segment_start + k * segment_length
+            tracklet.segment_end = tracklet.segment_start + segment_length - 1
 
+            tracklet_frames = np.arange(tracklet.segment_start, tracklet.segment_end)
 
+            tracklet.data = new_data[list(map(lambda x:x in tracklet_frames, new_data[:, 1])), :]
 
+            tracklet.start = min(tracklet.data[:, 0])
+            tracklet.finish = max(tracklet.data[:, -1])
+
+            new_trajectory.start_frame = min(new_trajectory.start_frame, tracklet.start)
+            new_trajectory.end_frame = max(new_trajectory.end_frame, tracklet.finish)
+
+            new_trajectory.tracklets.append(tracklet)
+
+        trajectories[i] = new_trajectory
+
+    return trajectories
 
 
 def trajectories_to_top(trajectories):
@@ -56,10 +83,10 @@ def remove_short_tracks(detections, cutoff_length):
 
 
 def fill_trajectories(detections):
-    detections = detections[detections[:, [1, 2, 3, 4, 5]].argsort(),]
-    detections_updated = detections
+    ind = np.lexsort((detections[:, 1], detections[:, 2], detections[:, 3], detections[:, 4], detections[:, 5]))
+    detections_updated = np.copy(detections[ind])
     person_ids = np.unique(detections[:, 0])
-    count = 0
+
     for i, person_id in enumerate(person_ids):
         relevant_detections = detections[detections[:, 0] == person_id, :]
         start_frame = np.min(relevant_detections[:, 1])
@@ -77,10 +104,10 @@ def fill_trajectories(detections):
 
         for k in range(len(start_ind)):
             inter_polated_detections = np.zeros(
-                (missing_frames[end_ind[k]] - missing_frames[start_ind[k]] + 1, np.size(detections, 1)))
+                (int(missing_frames[end_ind[k]] - missing_frames[start_ind[k]] + 1), np.size(detections, 1)))
 
             inter_polated_detections[:, 0] = person_id
-            inter_polated_detections[:, 1] = np.arange(missing_frames[start_ind[k]], missing_frames[end_ind[k]])
+            inter_polated_detections[:, 1] = np.arange(missing_frames[start_ind[k]], missing_frames[end_ind[k]]+1)
 
             pre_detection = detections[(detections[:, 0] == person_id) * detections[:, 1]
                                        == missing_frames[start_ind[k]] - 1, :]
@@ -88,12 +115,10 @@ def fill_trajectories(detections):
                                         == missing_frames[end_ind[k]] + 1, :]
 
             for c in range(2, np.size(detections, 1)):
-                inter_polated_detections[:, c] = np.linspace(pre_detection[c], post_detection[c],
+                inter_polated_detections[:, c] = np.linspace(pre_detection[0, c], post_detection[0, c],
                                                              np.size(inter_polated_detections, 0))
+            detections_updated = np.vstack((detections_updated, inter_polated_detections))
 
-            detections_updated.append(inter_polated_detections)
-
-        count += 1
     return detections_updated
 
 
@@ -257,10 +282,14 @@ def create_trajectories(configs, input_trajectories, start_frame, end_frame):
 
     output_trajectories = input_trajectories
     np.delete(output_trajectories, current_trajectories_ind)
-    output_trajectories = np.vstack(output_trajectories, smooth_trajectories)
+
+    output_trajectories.extend(smooth_trajectories)
 
     # show merged tracklets in window
     # TODO visualize
+
+    return output_trajectories
+
 
 
 
